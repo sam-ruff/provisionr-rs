@@ -21,13 +21,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run unit tests
-        run: cargo test --lib
-
       - name: Build application
         run: cargo build --release
 
-      - name: Start server for integration tests
+      - name: Start server for tests
         run: |
           ./target/release/provisionr &
           echo $! > server.pid
@@ -46,8 +43,8 @@ jobs:
           echo "Server failed to start"
           exit 1
 
-      - name: Run integration tests
-        run: cargo test --test integration_tests
+      - name: Run all tests
+        run: cargo test
 
       - name: Stop server
         if: always()
