@@ -90,8 +90,8 @@ where
                 id_field,
                 response,
             } => {
-                self.template_store.set_id_field(&name, id_field);
-                let _ = response.send(Ok(()));
+                let result = self.template_store.set_id_field(&name, id_field);
+                let _ = response.send(result);
             }
 
             Command::SetDynamicFields {
@@ -99,8 +99,8 @@ where
                 fields,
                 response,
             } => {
-                self.template_store.set_dynamic_fields(&name, fields);
-                let _ = response.send(Ok(()));
+                let result = self.template_store.set_dynamic_fields(&name, fields);
+                let _ = response.send(result);
             }
 
             Command::RenderTemplate {
@@ -147,7 +147,9 @@ where
 
     fn handle_set_values(&mut self, name: &str, yaml_str: &str) -> Result<(), ProvisionrError> {
         self.commander.parse_yaml(yaml_str)?;
-        self.template_store.set_values(name, yaml_str.to_string());
+        self.template_store
+            .set_values(name, yaml_str.to_string())
+            .map_err(ProvisionrError::TemplateNotFound)?;
         info!("Values for template '{}' set successfully", name);
         Ok(())
     }
@@ -348,7 +350,7 @@ mod tests {
             .expect_set_values()
             .with(eq("template.j2"), eq("key: value".to_string()))
             .times(1)
-            .return_const(());
+            .returning(|_, _| Ok(()));
 
         let rendered_store = MockRenderedStore::new();
 
@@ -538,7 +540,7 @@ mod tests {
             .expect_set_id_field()
             .with(eq("template.j2"), eq("serial_number".to_string()))
             .times(1)
-            .return_const(());
+            .returning(|_, _| Ok(()));
 
         let rendered_store = MockRenderedStore::new();
 
@@ -568,7 +570,7 @@ mod tests {
                     && fields[0].field_name == "password"
             })
             .times(1)
-            .return_const(());
+            .returning(|_, _| Ok(()));
 
         let rendered_store = MockRenderedStore::new();
 

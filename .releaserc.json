@@ -1,0 +1,26 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "release-assets/provisionr-linux-amd64",
+            "label": "Linux x86_64 (amd64)"
+          },
+          {
+            "path": "release-assets/provisionr-linux-arm64",
+            "label": "Linux ARM64 (aarch64)"
+          },
+          {
+            "path": "release-assets/provisionr-linux-armv7",
+            "label": "Linux ARMv7 (armv7hf)"
+          }
+        ]
+      }
+    ]
+  ]
+}
