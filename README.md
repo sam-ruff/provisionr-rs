@@ -43,6 +43,19 @@ cargo test --include-ignored
 
 Template names automatically get `.j2` extension appended if missing.
 
+## Building
+
+```bash
+# Debug build
+cargo build
+
+# Release build (optimised)
+cargo build --release
+
+# Binary location
+./target/release/provisionr
+```
+
 ## Cross-compilation
 
 Statically-linked musl builds for ARM:
