@@ -22,10 +22,10 @@ cargo test
 
 # Integration tests (requires running server)
 cargo run --release &
-cargo test --ignored
+cargo test -- --ignored
 
 # All tests
-cargo test --include-ignored
+cargo test -- --include-ignored
 ```
 
 ## API
