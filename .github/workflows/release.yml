@@ -22,7 +22,40 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run unit tests
-        run: cargo test
+        run: cargo test --lib
+
+      - name: Build application
+        run: cargo build --release
+
+      - name: Start server for integration tests
+        run: |
+          ./target/release/provisionr &
+          echo $! > server.pid
+          sleep 2
+
+      - name: Wait for server to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/health > /dev/null 2>&1 || curl -s http://localhost:3000/ > /dev/null 2>&1; then
+              echo "Server is ready"
+              exit 0
+            fi
+            echo "Waiting for server... ($i)"
+            sleep 1
+          done
+          echo "Server failed to start"
+          exit 1
+
+      - name: Run integration tests
+        run: cargo test --test integration_tests
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) 2>/dev/null || true
+            rm server.pid
+          fi
 
   build:
     name: Build Binaries
