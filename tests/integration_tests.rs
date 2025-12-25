@@ -38,6 +38,7 @@ async fn upload_template(client: &Client, name: &str, content: &str) -> reqwest:
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_create_and_delete_template() {
     let client = Client::new();
     let name = unique_name("create-delete");
@@ -70,6 +71,7 @@ async fn test_create_and_delete_template() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_set_and_render_with_values() {
     let client = Client::new();
     let name = unique_name("values");
@@ -104,6 +106,7 @@ async fn test_set_and_render_with_values() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_render_with_query_params() {
     let client = Client::new();
     let name = unique_name("query");
@@ -127,6 +130,7 @@ async fn test_render_with_query_params() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_caching_by_id_field() {
     let client = Client::new();
     let name = unique_name("cache");
@@ -166,6 +170,7 @@ async fn test_caching_by_id_field() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_dynamic_field_generation() {
     let client = Client::new();
     let name = unique_name("dynamic");
@@ -207,6 +212,7 @@ async fn test_dynamic_field_generation() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_list_and_get_rendered() {
     let client = Client::new();
     let name = unique_name("rendered");
@@ -256,6 +262,7 @@ async fn test_list_and_get_rendered() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_invalid_template_rejected() {
     let client = Client::new();
     let name = unique_name("invalid");
@@ -269,6 +276,7 @@ async fn test_invalid_template_rejected() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_template_auto_appends_j2_extension() {
     let client = Client::new();
     let name = unique_name("autoext");
@@ -290,6 +298,7 @@ async fn test_template_auto_appends_j2_extension() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_missing_template_error() {
     let client = Client::new();
     let name = unique_name("nonexistent");
@@ -307,6 +316,7 @@ async fn test_missing_template_error() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_missing_id_field_error() {
     let client = Client::new();
     let name = unique_name("noid");
@@ -330,6 +340,7 @@ async fn test_missing_id_field_error() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_custom_id_field() {
     let client = Client::new();
     let name = unique_name("customid");
@@ -363,6 +374,7 @@ async fn test_custom_id_field() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_invalid_yaml_values_rejected() {
     let client = Client::new();
     let name = unique_name("invalidyaml");
@@ -387,6 +399,7 @@ async fn test_invalid_yaml_values_rejected() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_valid_json_values_accepted() {
     let client = Client::new();
     let name = unique_name("jsonvalues");
@@ -421,6 +434,7 @@ async fn test_valid_json_values_accepted() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_delete_template() {
     let client = Client::new();
     let name = unique_name("delete");
@@ -461,6 +475,7 @@ async fn test_delete_template() {
 }
 
 #[tokio::test]
+#[ignore] // Requires running server
 async fn test_invalid_dynamic_fields_json_rejected() {
     let client = Client::new();
     let name = unique_name("invaliddynamic");
