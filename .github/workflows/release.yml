@@ -21,10 +21,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Run unit tests
+        run: cargo test
+
       - name: Build application
         run: cargo build --release
 
-      - name: Start server for tests
+      - name: Start server for integration tests
         run: |
           ./target/release/provisionr &
           echo $! > server.pid
@@ -33,7 +36,7 @@ jobs:
       - name: Wait for server to be ready
         run: |
           for i in {1..30}; do
-            if curl -s http://localhost:3000/health > /dev/null 2>&1 || curl -s http://localhost:3000/ > /dev/null 2>&1; then
+            if curl -s http://localhost:3000/ > /dev/null 2>&1; then
               echo "Server is ready"
               exit 0
             fi
@@ -43,8 +46,8 @@ jobs:
           echo "Server failed to start"
           exit 1
 
-      - name: Run all tests
-        run: cargo test
+      - name: Run integration tests
+        run: cargo test --ignored
 
       - name: Stop server
         if: always()

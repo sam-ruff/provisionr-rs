@@ -1,79 +1,62 @@
 # Provisionr
 
-A REST-based template provisioning system for generating configuration files with dynamic values.
+A REST-based template provisioning system for generating configuration files with dynamic values. Uses Jinja2 templates with automatic caching by a configurable ID field.
 
-## Running Tests
-
-### Unit Tests
-```bash
-cargo test --bin provisionr
-```
-
-### Integration Tests
-
-Integration tests require a running server:
+## Running
 
 ```bash
-# Terminal 1: Start the server
-cargo run
+# Default port 3000
+cargo run --release
 
-# Terminal 2: Run integration tests
-cargo test --test integration_tests
-
-# Or specify a custom server URL
-PROVISIONR_URL=http://localhost:8080 cargo test --test integration_tests
+# Custom port and database
+PROVISIONR_PORT=8080 PROVISIONR_DB=./data.db cargo run --release
 ```
 
-## Development
+Swagger UI available at `http://localhost:3000/swagger-ui/`
+
+## Testing
 
 ```bash
-# Run the server (default port 3000)
-cargo run
+# Unit tests only (no server required)
+cargo test
 
-# Run with custom port and database
-PROVISIONR_PORT=8080 PROVISIONR_DB=./data.db cargo run
+# Integration tests (requires running server)
+cargo run --release &
+cargo test --ignored
 
-# Check for warnings
-cargo clippy
+# All tests
+cargo test --include-ignored
 ```
 
-## API Endpoints
+## API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/template/{name}` | Create/update template (.j2 extension required) |
-| GET | `/api/template/{name}` | Render template with query parameters |
-| DELETE | `/api/template/{name}` | Delete a template |
-| PUT | `/api/template/{name}/values` | Set YAML default values |
-| PUT | `/api/template/{name}/id-field` | Set ID field for caching |
-| PUT | `/api/template/{name}/dynamic-fields` | Configure dynamic value generation |
-| GET | `/api/rendered/{name}` | List rendered instances |
-| GET | `/api/rendered/{name}/{id_value}` | Get specific rendered template |
+| POST | `/api/template/{name}` | Upload template (multipart file) |
+| GET | `/api/template/{name}` | Render template with query params |
+| DELETE | `/api/template/{name}` | Delete template |
+| PUT | `/api/template/{name}/values` | Set default values (YAML body) |
+| PUT | `/api/template/{name}/id-field` | Set caching ID field |
+| PUT | `/api/template/{name}/dynamic-fields` | Configure generated fields |
+| GET | `/api/rendered/{name}` | List cached renders |
+| GET | `/api/rendered/{name}/{id}` | Get specific cached render |
 
-### Setup for ARM
-Do 
-```bash
-rustup target add aarch64-unknown-linux-gnu # 64-bit ARM Linux target, this is dynamically linked
-rustup target add aarch64-unknown-linux-musl # 64-bit ARM Linux, statically linked
-```
-Add `.cargo/config.toml` and specify which linkers to use for ARM targets.
+Template names automatically get `.j2` extension appended if missing.
 
-Then install the toolchains for compilation:
-```bash
-sudo apt install gcc-aarch64-linux-gnu
-# Also install the emulators
-# Install system emulator
-sudo apt install qemu-system-arm
-# Run a bare-metal binary
-qemu-system-arm -cpu cortex-m4 -machine lm3s6965evb -nographic -kernel your_binary.elf
-```
-Then build for the target:
-```bash
-cargo build --release --target aarch64-unknown-linux-musl
-```
+## Cross-compilation
 
-For 32 bit Arm running Zynq SoC
+Statically-linked musl builds for ARM:
+
 ```bash
-rustup target add armv7-unknown-linux-musleabihf
-cargo build --release --target armv7-unknown-linux-musleabihf
+# Install cross (handles toolchains via Docker)
+cargo install cross --git https://github.com/cross-rs/cross
+
+# Build for ARM64 (Raspberry Pi 4, etc.)
+cross build --release --target aarch64-unknown-linux-musl
+
+# Build for ARMv7 (older Pi, Zynq)
+cross build --release --target armv7-unknown-linux-musleabihf
+
+# Build for x86_64 Linux
+cross build --release --target x86_64-unknown-linux-musl
 ```
