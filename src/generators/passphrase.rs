@@ -1,20 +1,23 @@
 use crate::generators::traits::ValueGenerator;
+use once_cell::sync::Lazy;
 use rand::seq::IndexedRandom;
 
 const WORDLIST: &str = include_str!("../assets/eff_short_wordlist.txt");
 
+static FILTERED_WORDS: Lazy<Vec<&'static str>> = Lazy::new(|| {
+    WORDLIST
+        .lines()
+        .filter(|l| !l.is_empty() && !l.contains('-'))
+        .collect()
+});
+
 pub struct PassphraseGenerator {
     word_count: usize,
-    words: Vec<&'static str>,
 }
 
 impl PassphraseGenerator {
     pub fn new(word_count: usize) -> Self {
-        let words: Vec<&'static str> = WORDLIST
-            .lines()
-            .filter(|l| !l.is_empty() && !l.contains('-'))
-            .collect();
-        Self { word_count, words }
+        Self { word_count }
     }
 }
 
@@ -22,7 +25,7 @@ impl ValueGenerator for PassphraseGenerator {
     fn generate(&self) -> String {
         let mut rng = rand::rng();
         (0..self.word_count)
-            .map(|_| *self.words.choose(&mut rng).unwrap_or(&"word"))
+            .map(|_| *FILTERED_WORDS.choose(&mut rng).unwrap_or(&"word"))
             .collect::<Vec<_>>()
             .join("-")
     }
@@ -35,9 +38,8 @@ mod tests {
 
     #[test]
     fn wordlist_loaded() {
-        let generator = PassphraseGenerator::new(4);
-        assert!(!generator.words.is_empty());
-        assert!(generator.words.len() > 1000);
+        assert!(!FILTERED_WORDS.is_empty());
+        assert!(FILTERED_WORDS.len() > 1000);
     }
 
     #[quickcheck]

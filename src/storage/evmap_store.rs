@@ -4,11 +4,12 @@ use evmap::handles::{ReadHandle, WriteHandle};
 #[cfg_attr(test, mockall::automock)]
 pub trait TemplateStore: Send {
     fn set_template_content(&mut self, name: &str, content: String);
-    fn set_values(&mut self, name: &str, yaml_str: String);
-    fn set_id_field(&mut self, name: &str, id_field: String);
-    fn set_dynamic_fields(&mut self, name: &str, fields: Vec<DynamicFieldConfig>);
+    fn set_values(&mut self, name: &str, yaml_str: String) -> Result<(), String>;
+    fn set_id_field(&mut self, name: &str, id_field: String) -> Result<(), String>;
+    fn set_dynamic_fields(&mut self, name: &str, fields: Vec<DynamicFieldConfig>) -> Result<(), String>;
     fn get(&self, name: &str) -> Option<TemplateData>;
     fn delete(&mut self, name: &str);
+    fn exists(&self, name: &str) -> bool;
 }
 
 pub struct EvmapTemplateStore {
@@ -35,6 +36,13 @@ impl EvmapTemplateStore {
         self.write.clear(name.to_string());
         self.write.insert(name.to_string(), data);
     }
+
+    fn update_template(&mut self, name: &str, update_fn: impl FnOnce(&mut TemplateData)) {
+        let mut data = self.get_or_default(name);
+        update_fn(&mut data);
+        self.update(name, data);
+        self.write.publish();
+    }
 }
 
 impl Default for EvmapTemplateStore {
@@ -45,31 +53,31 @@ impl Default for EvmapTemplateStore {
 
 impl TemplateStore for EvmapTemplateStore {
     fn set_template_content(&mut self, name: &str, content: String) {
-        let mut data = self.get_or_default(name);
-        data.template_content = content;
-        self.update(name, data);
-        self.write.publish();
+        self.update_template(name, |d| d.template_content = content);
     }
 
-    fn set_values(&mut self, name: &str, yaml_str: String) {
-        let mut data = self.get_or_default(name);
-        data.values_yaml = Some(yaml_str);
-        self.update(name, data);
-        self.write.publish();
+    fn set_values(&mut self, name: &str, yaml_str: String) -> Result<(), String> {
+        if !self.exists(name) {
+            return Err(format!("Template '{}' not found", name));
+        }
+        self.update_template(name, |d| d.values_yaml = Some(yaml_str));
+        Ok(())
     }
 
-    fn set_id_field(&mut self, name: &str, id_field: String) {
-        let mut data = self.get_or_default(name);
-        data.id_field = id_field;
-        self.update(name, data);
-        self.write.publish();
+    fn set_id_field(&mut self, name: &str, id_field: String) -> Result<(), String> {
+        if !self.exists(name) {
+            return Err(format!("Template '{}' not found", name));
+        }
+        self.update_template(name, |d| d.id_field = id_field);
+        Ok(())
     }
 
-    fn set_dynamic_fields(&mut self, name: &str, fields: Vec<DynamicFieldConfig>) {
-        let mut data = self.get_or_default(name);
-        data.dynamic_fields = fields;
-        self.update(name, data);
-        self.write.publish();
+    fn set_dynamic_fields(&mut self, name: &str, fields: Vec<DynamicFieldConfig>) -> Result<(), String> {
+        if !self.exists(name) {
+            return Err(format!("Template '{}' not found", name));
+        }
+        self.update_template(name, |d| d.dynamic_fields = fields);
+        Ok(())
     }
 
     fn get(&self, name: &str) -> Option<TemplateData> {
@@ -79,6 +87,10 @@ impl TemplateStore for EvmapTemplateStore {
     fn delete(&mut self, name: &str) {
         self.write.clear(name.to_string());
         self.write.publish();
+    }
+
+    fn exists(&self, name: &str) -> bool {
+        self.read.get_one(name).is_some()
     }
 }
 
@@ -104,10 +116,19 @@ mod tests {
         let mut store = EvmapTemplateStore::new();
 
         store.set_template_content("test.j2", "content".to_string());
-        store.set_values("test.j2", "key: value".to_string());
+        store.set_values("test.j2", "key: value".to_string()).unwrap();
 
         let data = store.get("test.j2").unwrap();
         assert_eq!(data.values_yaml, Some("key: value".to_string()));
+    }
+
+    #[test]
+    fn set_values_fails_if_template_not_found() {
+        let mut store = EvmapTemplateStore::new();
+
+        let result = store.set_values("nonexistent.j2", "key: value".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
     }
 
     #[test]
@@ -115,10 +136,19 @@ mod tests {
         let mut store = EvmapTemplateStore::new();
 
         store.set_template_content("test.j2", "content".to_string());
-        store.set_id_field("test.j2", "serial_number".to_string());
+        store.set_id_field("test.j2", "serial_number".to_string()).unwrap();
 
         let data = store.get("test.j2").unwrap();
         assert_eq!(data.id_field, "serial_number");
+    }
+
+    #[test]
+    fn set_id_field_fails_if_template_not_found() {
+        let mut store = EvmapTemplateStore::new();
+
+        let result = store.set_id_field("nonexistent.j2", "serial".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
     }
 
     #[test]
@@ -132,11 +162,26 @@ mod tests {
                 field_name: "password".to_string(),
                 generator_type: GeneratorType::Alphanumeric(16),
             }],
-        );
+        ).unwrap();
 
         let data = store.get("test.j2").unwrap();
         assert_eq!(data.dynamic_fields.len(), 1);
         assert_eq!(data.dynamic_fields[0].field_name, "password");
+    }
+
+    #[test]
+    fn set_dynamic_fields_fails_if_template_not_found() {
+        let mut store = EvmapTemplateStore::new();
+
+        let result = store.set_dynamic_fields(
+            "nonexistent.j2",
+            vec![DynamicFieldConfig {
+                field_name: "password".to_string(),
+                generator_type: GeneratorType::Alphanumeric(16),
+            }],
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
     }
 
     #[test]
@@ -155,12 +200,27 @@ mod tests {
         let mut store = EvmapTemplateStore::new();
 
         store.set_template_content("test.j2", "Hello".to_string());
-        store.set_values("test.j2", "name: World".to_string());
-        store.set_id_field("test.j2", "mac".to_string());
+        store.set_values("test.j2", "name: World".to_string()).unwrap();
+        store.set_id_field("test.j2", "mac".to_string()).unwrap();
 
         let data = store.get("test.j2").unwrap();
         assert_eq!(data.template_content, "Hello");
         assert_eq!(data.values_yaml, Some("name: World".to_string()));
         assert_eq!(data.id_field, "mac");
+    }
+
+    #[test]
+    fn exists_returns_true_for_existing_template() {
+        let mut store = EvmapTemplateStore::new();
+
+        store.set_template_content("test.j2", "content".to_string());
+        assert!(store.exists("test.j2"));
+    }
+
+    #[test]
+    fn exists_returns_false_for_nonexistent_template() {
+        let store = EvmapTemplateStore::new();
+
+        assert!(!store.exists("nonexistent.j2"));
     }
 }
