@@ -56,19 +56,19 @@ cargo test -- --include-ignored
 
 ### Templates
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/template/{name}` | Upload template (multipart file) |
-| GET | `/api/v1/template/{name}` | Render template with query params |
-| DELETE | `/api/v1/template/{name}` | Delete template |
-| PUT | `/api/v1/template/{name}/values` | Set default values (YAML/JSON body) |
+| Method | Path                             | Description                         |
+|--------|----------------------------------|-------------------------------------|
+| POST   | `/api/v1/template/{name}`        | Upload template (multipart file)    |
+| GET    | `/api/v1/template/{name}`        | Render template with query params   |
+| DELETE | `/api/v1/template/{name}`        | Delete template                     |
+| PUT    | `/api/v1/template/{name}/values` | Set default values (YAML/JSON body) |
 
 ### Configuration
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/config/{name}` | Get template configuration |
-| PUT | `/api/v1/config/{name}` | Set template configuration |
+| Method | Path                    | Description                |
+|--------|-------------------------|----------------------------|
+| GET    | `/api/v1/config/{name}` | Get template configuration |
+| PUT    | `/api/v1/config/{name}` | Set template configuration |
 
 Configuration includes:
 - `id_field`: Query parameter used for caching (default: mac_address)
@@ -77,10 +77,10 @@ Configuration includes:
 
 ### Rendered Templates
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/rendered/{name}` | List cached renders |
-| GET | `/api/v1/rendered/{name}/{id}` | Get specific cached render |
+| Method | Path                           | Description                |
+|--------|--------------------------------|----------------------------|
+| GET    | `/api/v1/rendered/{name}`      | List cached renders        |
+| GET    | `/api/v1/rendered/{name}/{id}` | Get specific cached render |
 
 ## Building
 
