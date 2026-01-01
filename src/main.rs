@@ -7,9 +7,11 @@ mod storage;
 mod templating;
 mod threads;
 
-use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
+
+use clap::Parser;
 
 use axum::{
     response::{Html, IntoResponse},
@@ -26,15 +28,35 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::commands::commander::ConcreteCommander;
 use crate::commands::models::Command;
+use crate::rest::config::{get_config, set_config};
 use crate::rest::rendered::{get_rendered, list_rendered};
 use crate::rest::state::AppState;
-use crate::rest::template::{
-    delete_template, render_template, set_dynamic_fields, set_id_field, set_template, set_values,
-};
+use crate::rest::template::{delete_template, render_template, set_template, set_values};
 use crate::statics::shutdown::{global_cancellation_token, request_shutdown};
-use crate::storage::{EvmapTemplateStore, RenderedStore, SqliteRenderedStore};
+use crate::storage::{DashMapTemplateStore, RenderedStore, SqliteRenderedStore};
 use crate::templating::MiniJinjaEngine;
 use crate::threads::handler::{ConcreteHandler, Handler};
+
+#[derive(Parser, Debug)]
+#[command(name = "provisionr")]
+#[command(about = "Template provisioning server with dynamic value generation")]
+struct Args {
+    /// Path to YAML configuration file
+    #[arg(long)]
+    config: Option<PathBuf>,
+
+    /// Log level (trace, debug, info, warn, error)
+    #[arg(long, default_value = "info")]
+    log_level: String,
+
+    /// Port to listen on
+    #[arg(long, short, default_value = "3000")]
+    port: u16,
+
+    /// Database path
+    #[arg(long, default_value = "provisionr.db")]
+    db: String,
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -43,25 +65,25 @@ use crate::threads::handler::{ConcreteHandler, Handler};
         rest::template::render_template,
         rest::template::delete_template,
         rest::template::set_values,
-        rest::template::set_id_field,
-        rest::template::set_dynamic_fields,
+        rest::config::get_config,
+        rest::config::set_config,
         rest::rendered::list_rendered,
         rest::rendered::get_rendered,
     ),
     components(schemas(
         storage::models::GeneratorType,
         storage::models::DynamicFieldConfig,
+        storage::models::HashingAlgorithm,
+        storage::models::TemplateConfig,
         storage::models::TemplateData,
         storage::models::RenderedTemplate,
         storage::models::RenderedTemplateSummary,
-        rest::template::SetIdFieldBody,
-        rest::template::SetDynamicFieldsBody,
-        rest::command::ApiResponse<String>,
-        rest::command::ApiResponse<storage::models::RenderedTemplate>,
-        rest::command::ApiResponse<Vec<storage::models::RenderedTemplateSummary>>,
+        rest::command::ApiErrorResponse,
+        rest::command::ApiSuccessMessage,
     )),
     tags(
         (name = "templates", description = "Template management endpoints"),
+        (name = "config", description = "Template configuration endpoints"),
         (name = "rendered", description = "Rendered template retrieval endpoints")
     ),
     info(
@@ -100,17 +122,17 @@ async fn static_handler(
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    let args = Args::parse();
+
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&args.log_level))
+        .init();
+
     info!("Starting up");
 
-    let port: u16 = env::var("PROVISIONR_PORT")
-        .unwrap_or_else(|_| "3000".to_string())
-        .parse()
-        .expect("PORT must be a number");
+    let port = args.port;
+    let db_path = args.db;
 
-    let db_path = env::var("PROVISIONR_DB").unwrap_or_else(|_| "provisionr.db".to_string());
-
-    let template_store = EvmapTemplateStore::new();
+    let template_store = DashMapTemplateStore::new();
 
     let rendered_store =
         SqliteRenderedStore::new(&db_path).expect("Failed to open database");
@@ -138,14 +160,13 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route(
-            "/api/template/{name}",
+            "/api/v1/template/{name}",
             post(set_template).get(render_template).delete(delete_template),
         )
-        .route("/api/template/{name}/values", put(set_values))
-        .route("/api/template/{name}/id-field", put(set_id_field))
-        .route("/api/template/{name}/dynamic-fields", put(set_dynamic_fields))
-        .route("/api/rendered/{name}", get(list_rendered))
-        .route("/api/rendered/{name}/{id_value}", get(get_rendered))
+        .route("/api/v1/template/{name}/values", put(set_values))
+        .route("/api/v1/config/{name}", get(get_config).put(set_config))
+        .route("/api/v1/rendered/{name}", get(list_rendered))
+        .route("/api/v1/rendered/{name}/{id_value}", get(get_rendered))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/{*path}", get(static_handler))
         .with_state(app_state);

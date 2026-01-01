@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tokio::sync::oneshot;
 
-use crate::storage::models::{DynamicFieldConfig, RenderedTemplate, RenderedTemplateSummary};
+use crate::storage::models::{RenderedTemplate, RenderedTemplateSummary, TemplateConfig};
 
 pub enum Command {
     SetTemplate {
@@ -14,15 +14,14 @@ pub enum Command {
         yaml: String,
         response: oneshot::Sender<Result<(), String>>,
     },
-    SetIdField {
+    SetConfig {
         name: String,
-        id_field: String,
+        config: TemplateConfig,
         response: oneshot::Sender<Result<(), String>>,
     },
-    SetDynamicFields {
+    GetConfig {
         name: String,
-        fields: Vec<DynamicFieldConfig>,
-        response: oneshot::Sender<Result<(), String>>,
+        response: oneshot::Sender<Result<Option<TemplateConfig>, String>>,
     },
     RenderTemplate {
         name: String,
