@@ -13,7 +13,7 @@ db: provisionr.db
 # Templates to load at startup (optional)
 # These can be overwritten via the REST API
 # templates:
-#   kickstart:
+#   kickstart: # This is the template name used when rendering it
 #     template_path: ./templates/kickstart.ks.j2
 #     values_path: ./values/kickstart.yaml
 #     id_field: mac_address
