@@ -13,37 +13,38 @@ use crate::rest::state::AppState;
 
 const TIMEOUT_SECS: u64 = 5;
 
+/// Error response returned when an operation fails
 #[derive(Serialize, ToSchema)]
-pub struct ApiResponse<T: Serialize> {
-    status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<T>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+pub struct ApiErrorResponse {
+    #[schema(example = "error")]
+    pub status: String,
+    #[schema(example = "Template not found")]
+    pub error: String,
 }
 
-impl<T: Serialize> ApiResponse<T> {
-    pub fn ok(data: T) -> Self {
-        Self {
-            status: "ok".to_string(),
-            data: Some(data),
-            error: None,
-        }
-    }
-
-    pub fn not_found() -> Self {
-        Self {
-            status: "not_found".to_string(),
-            data: None,
-            error: None,
-        }
-    }
-
-    pub fn error(msg: impl Into<String>) -> Self {
+impl ApiErrorResponse {
+    pub fn new(msg: impl Into<String>) -> Self {
         Self {
             status: "error".to_string(),
-            data: None,
-            error: Some(msg.into()),
+            error: msg.into(),
+        }
+    }
+}
+
+/// Success message returned for operations that don't return data
+#[derive(Serialize, ToSchema)]
+pub struct ApiSuccessMessage {
+    #[schema(example = "ok")]
+    pub status: String,
+    #[schema(example = "Operation completed")]
+    pub message: String,
+}
+
+impl ApiSuccessMessage {
+    pub fn new(msg: impl Into<String>) -> Self {
+        Self {
+            status: "ok".to_string(),
+            message: msg.into(),
         }
     }
 }
@@ -75,7 +76,7 @@ impl IntoResponse for CommandError {
             Self::Handler(e) => (StatusCode::BAD_REQUEST, e.as_str()),
             Self::HandlerUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "handler-unavailable"),
         };
-        (status, Json(ApiResponse::<()>::error(message))).into_response()
+        (status, Json(ApiErrorResponse::new(message))).into_response()
     }
 }
 

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 
 use crate::error::ProvisionrError;
-use crate::generators::{AlphanumericGenerator, PassphraseGenerator, ValueGenerator};
-use crate::storage::models::{DynamicFieldConfig, GeneratorType};
+use crate::generators::{create_hasher, AlphanumericGenerator, PassphraseGenerator, ValueGenerator};
+use crate::storage::models::{DynamicFieldConfig, GeneratorType, HashingAlgorithm};
 use crate::templating::TemplateEngine;
 
 #[cfg_attr(test, mockall::automock)]
@@ -14,7 +14,11 @@ pub trait Commander: Send {
         template_content: &str,
         values: &HashMap<String, String>,
     ) -> Result<String, ProvisionrError>;
-    fn generate_dynamic_values(&self, fields: &[DynamicFieldConfig]) -> HashMap<String, String>;
+    fn generate_dynamic_values(
+        &self,
+        fields: &[DynamicFieldConfig],
+        hashing_algorithm: &HashingAlgorithm,
+    ) -> HashMap<String, String>;
     fn parse_yaml(&self, yaml_str: &str) -> Result<Yaml, ProvisionrError>;
     fn yaml_to_map(&self, yaml: &Yaml) -> HashMap<String, String>;
     fn map_to_yaml_string(&self, map: &HashMap<String, String>) -> Result<String, ProvisionrError>;
@@ -47,14 +51,25 @@ impl<E: TemplateEngine + Send> Commander for ConcreteCommander<E> {
             .map_err(ProvisionrError::TemplateRender)
     }
 
-    fn generate_dynamic_values(&self, fields: &[DynamicFieldConfig]) -> HashMap<String, String> {
+    fn generate_dynamic_values(
+        &self,
+        fields: &[DynamicFieldConfig],
+        hashing_algorithm: &HashingAlgorithm,
+    ) -> HashMap<String, String> {
+        let hasher = create_hasher(hashing_algorithm);
         let mut result = HashMap::new();
         for field in fields {
             let generator: Box<dyn ValueGenerator> = match &field.generator_type {
-                GeneratorType::Alphanumeric(len) => Box::new(AlphanumericGenerator::new(*len)),
-                GeneratorType::Passphrase(count) => Box::new(PassphraseGenerator::new(*count)),
+                GeneratorType::Alphanumeric { length } => {
+                    Box::new(AlphanumericGenerator::new(*length))
+                }
+                GeneratorType::Passphrase { word_count } => {
+                    Box::new(PassphraseGenerator::new(*word_count))
+                }
             };
-            result.insert(field.field_name.clone(), generator.generate());
+            let raw_value = generator.generate();
+            let hashed_value = hasher.hash(&raw_value);
+            result.insert(field.field_name.clone(), hashed_value);
         }
         result
     }
@@ -202,34 +217,34 @@ mod tests {
 
     #[quickcheck]
     fn generate_alphanumeric_correct_length(len: u8) -> bool {
-        let len = (len as usize).max(1).min(100);
+        let length = (len as usize).clamp(1, 100);
         let commander = create_commander();
         let fields = vec![DynamicFieldConfig {
             field_name: "password".to_string(),
-            generator_type: GeneratorType::Alphanumeric(len),
+            generator_type: GeneratorType::Alphanumeric { length },
         }];
 
-        let result = commander.generate_dynamic_values(&fields);
+        let result = commander.generate_dynamic_values(&fields, &HashingAlgorithm::None);
         result
             .get("password")
-            .map(|p| p.len() == len)
+            .map(|p| p.len() == length)
             .unwrap_or(false)
     }
 
     #[quickcheck]
     fn generate_passphrase_correct_word_count(count: u8) -> bool {
         // Use % 9 + 1 to guarantee range 1-9
-        let count = (count as usize % 9) + 1;
+        let word_count = (count as usize % 9) + 1;
         let commander = create_commander();
         let fields = vec![DynamicFieldConfig {
             field_name: "passphrase".to_string(),
-            generator_type: GeneratorType::Passphrase(count),
+            generator_type: GeneratorType::Passphrase { word_count },
         }];
 
-        let result = commander.generate_dynamic_values(&fields);
+        let result = commander.generate_dynamic_values(&fields, &HashingAlgorithm::None);
         result
             .get("passphrase")
-            .map(|p| p.split('-').count() == count)
+            .map(|p| p.split('-').count() == word_count)
             .unwrap_or(false)
     }
 

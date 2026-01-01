@@ -6,20 +6,20 @@ use axum::{
 };
 
 use crate::commands::models::Command;
-use crate::rest::command::{send_command, ApiResponse, CommandError};
+use crate::rest::command::{send_command, ApiErrorResponse, CommandError};
 use crate::rest::state::AppState;
 use crate::storage::models::{RenderedTemplate, RenderedTemplateSummary};
 
 #[utoipa::path(
     get,
-    path = "/api/rendered/{name}",
+    path = "/api/v1/rendered/{name}",
     description = "List all rendered instances of a template. Each instance is identified by its ID field value and creation timestamp.",
     params(
-        ("name" = String, Path, description = "Template name (with .j2 extension)")
+        ("name" = String, Path, description = "Template name")
     ),
     responses(
-        (status = 200, description = "List of rendered template instances", body = ApiResponse<Vec<RenderedTemplateSummary>>),
-        (status = 503, description = "Handler unavailable", body = ApiResponse<Vec<RenderedTemplateSummary>>)
+        (status = 200, description = "List of rendered template instances", body = Vec<RenderedTemplateSummary>),
+        (status = 503, description = "Handler unavailable", body = ApiErrorResponse)
     ),
     tag = "rendered"
 )]
@@ -33,21 +33,21 @@ pub async fn list_rendered(
     })
     .await?;
 
-    Ok((StatusCode::OK, Json(ApiResponse::ok(list))))
+    Ok((StatusCode::OK, Json(list)))
 }
 
 #[utoipa::path(
     get,
-    path = "/api/rendered/{name}/{id_value}",
+    path = "/api/v1/rendered/{name}/{id_value}",
     description = "Get a specific rendered template instance including its content and any dynamically generated values.",
     params(
-        ("name" = String, Path, description = "Template name (with .j2 extension)"),
+        ("name" = String, Path, description = "Template name"),
         ("id_value" = String, Path, description = "ID field value used when rendering (e.g. MAC address)")
     ),
     responses(
-        (status = 200, description = "Rendered template details including content and generated values", body = ApiResponse<RenderedTemplate>),
-        (status = 404, description = "Rendered template not found", body = ApiResponse<RenderedTemplate>),
-        (status = 503, description = "Handler unavailable", body = ApiResponse<RenderedTemplate>)
+        (status = 200, description = "Rendered template details including content and generated values", body = RenderedTemplate),
+        (status = 404, description = "Rendered template not found", body = ApiErrorResponse),
+        (status = 503, description = "Handler unavailable", body = ApiErrorResponse)
     ),
     tag = "rendered"
 )]
@@ -63,7 +63,11 @@ pub async fn get_rendered(
     .await?;
 
     match result {
-        Some(rendered) => Ok((StatusCode::OK, Json(ApiResponse::ok(rendered)))),
-        None => Ok((StatusCode::NOT_FOUND, Json(ApiResponse::<RenderedTemplate>::not_found()))),
+        Some(rendered) => Ok((StatusCode::OK, Json(rendered)).into_response()),
+        None => Ok((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorResponse::new("Rendered template not found")),
+        )
+            .into_response()),
     }
 }

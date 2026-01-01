@@ -85,21 +85,17 @@ where
                 let _ = response.send(result);
             }
 
-            Command::SetIdField {
+            Command::SetConfig {
                 name,
-                id_field,
+                config,
                 response,
             } => {
-                let result = self.template_store.set_id_field(&name, id_field);
+                let result = self.template_store.set_config(&name, config);
                 let _ = response.send(result);
             }
 
-            Command::SetDynamicFields {
-                name,
-                fields,
-                response,
-            } => {
-                let result = self.template_store.set_dynamic_fields(&name, fields);
+            Command::GetConfig { name, response } => {
+                let result = Ok(self.template_store.get_config(&name));
                 let _ = response.send(result);
             }
 
@@ -190,7 +186,7 @@ where
 
         let generated = self
             .commander
-            .generate_dynamic_values(&template_data.dynamic_fields);
+            .generate_dynamic_values(&template_data.dynamic_fields, &template_data.hashing_algorithm);
         let generated_yaml = self.commander.map_to_yaml_string(&generated)?;
 
         for (k, v) in &generated {
@@ -235,7 +231,10 @@ where
 mod tests {
     use super::*;
     use crate::commands::MockCommander;
-    use crate::storage::models::{DynamicFieldConfig, GeneratorType, RenderedTemplate, TemplateData};
+    use crate::storage::models::{
+        DynamicFieldConfig, GeneratorType, HashingAlgorithm, RenderedTemplate, TemplateConfig,
+        TemplateData,
+    };
     use crate::storage::{MockRenderedStore, MockTemplateStore};
     use mockall::predicate::*;
     use tokio::sync::{mpsc, oneshot};
@@ -267,7 +266,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::SetTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             content: "{{ invalid".to_string(),
             response: tx,
         });
@@ -289,7 +288,7 @@ mod tests {
         let mut template_store = MockTemplateStore::new();
         template_store
             .expect_set_template_content()
-            .with(eq("template.j2"), eq("Hello {{ name }}".to_string()))
+            .with(eq("template"), eq("Hello {{ name }}".to_string()))
             .times(1)
             .return_const(());
 
@@ -299,7 +298,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::SetTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             content: "Hello {{ name }}".to_string(),
             response: tx,
         });
@@ -324,7 +323,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::SetValues {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             yaml: "invalid: [yaml".to_string(),
             response: tx,
         });
@@ -348,7 +347,7 @@ mod tests {
         let mut template_store = MockTemplateStore::new();
         template_store
             .expect_set_values()
-            .with(eq("template.j2"), eq("key: value".to_string()))
+            .with(eq("template"), eq("key: value".to_string()))
             .times(1)
             .returning(|_, _| Ok(()));
 
@@ -358,7 +357,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::SetValues {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             yaml: "key: value".to_string(),
             response: tx,
         });
@@ -372,24 +371,25 @@ mod tests {
         let commander = MockCommander::new();
 
         let mut template_store = MockTemplateStore::new();
-        template_store.expect_get().with(eq("template.j2")).times(1).returning(|_| {
+        template_store.expect_get().with(eq("template")).times(1).returning(|_| {
             Some(TemplateData {
                 template_content: "Hello {{ name }}".to_string(),
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
+                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
         let mut rendered_store = MockRenderedStore::new();
         rendered_store
             .expect_get_rendered()
-            .with(eq("template.j2"), eq("AA:BB:CC"))
+            .with(eq("template"), eq("AA:BB:CC"))
             .times(1)
             .returning(|_, _| {
                 Ok(Some(RenderedTemplate {
                     id: 1,
-                    template_name: "template.j2".to_string(),
+                    template_name: "template".to_string(),
                     id_field_value: "AA:BB:CC".to_string(),
                     rendered_content: "Cached Hello World".to_string(),
                     generated_values: "".to_string(),
@@ -403,7 +403,7 @@ mod tests {
         let mut query = HashMap::new();
         query.insert("mac_address".to_string(), "AA:BB:CC".to_string());
         handler.process_command(Command::RenderTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             query_values: query,
             response: tx,
         });
@@ -418,7 +418,7 @@ mod tests {
         commander
             .expect_generate_dynamic_values()
             .times(1)
-            .returning(|_| HashMap::new());
+            .returning(|_, _| HashMap::new());
         commander
             .expect_map_to_yaml_string()
             .times(1)
@@ -433,12 +433,13 @@ mod tests {
             .returning(|_, _| Ok("Hello World".to_string()));
 
         let mut template_store = MockTemplateStore::new();
-        template_store.expect_get().with(eq("template.j2")).times(1).returning(|_| {
+        template_store.expect_get().with(eq("template")).times(1).returning(|_| {
             Some(TemplateData {
                 template_content: "Hello {{ name }}".to_string(),
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
+                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
@@ -450,7 +451,7 @@ mod tests {
         rendered_store
             .expect_store_rendered()
             .with(
-                eq("template.j2"),
+                eq("template"),
                 eq("AA:BB:CC"),
                 eq("Hello World"),
                 eq("---\n"),
@@ -465,7 +466,7 @@ mod tests {
         query.insert("mac_address".to_string(), "AA:BB:CC".to_string());
         query.insert("name".to_string(), "World".to_string());
         handler.process_command(Command::RenderTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             query_values: query,
             response: tx,
         });
@@ -481,7 +482,7 @@ mod tests {
         let mut template_store = MockTemplateStore::new();
         template_store
             .expect_get()
-            .with(eq("missing.j2"))
+            .with(eq("missing"))
             .times(1)
             .returning(|_| None);
 
@@ -491,7 +492,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::RenderTemplate {
-            name: "missing.j2".to_string(),
+            name: "missing".to_string(),
             query_values: HashMap::new(),
             response: tx,
         });
@@ -512,6 +513,7 @@ mod tests {
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
+                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
@@ -521,7 +523,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::RenderTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             query_values: HashMap::new(),
             response: tx,
         });
@@ -532,42 +534,18 @@ mod tests {
     }
 
     #[test]
-    fn set_id_field_updates_store() {
+    fn set_config_updates_store() {
         let commander = MockCommander::new();
 
         let mut template_store = MockTemplateStore::new();
         template_store
-            .expect_set_id_field()
-            .with(eq("template.j2"), eq("serial_number".to_string()))
-            .times(1)
-            .returning(|_, _| Ok(()));
-
-        let rendered_store = MockRenderedStore::new();
-
-        let mut handler = create_test_handler(commander, template_store, rendered_store);
-
-        let (tx, rx) = oneshot::channel();
-        handler.process_command(Command::SetIdField {
-            name: "template.j2".to_string(),
-            id_field: "serial_number".to_string(),
-            response: tx,
-        });
-
-        let result = rx.blocking_recv().unwrap();
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn set_dynamic_fields_updates_store() {
-        let commander = MockCommander::new();
-
-        let mut template_store = MockTemplateStore::new();
-        template_store
-            .expect_set_dynamic_fields()
-            .withf(|name, fields| {
-                name == "template.j2"
-                    && fields.len() == 1
-                    && fields[0].field_name == "password"
+            .expect_set_config()
+            .withf(|name, config| {
+                name == "template"
+                    && config.id_field == "serial_number"
+                    && config.dynamic_fields.len() == 1
+                    && config.dynamic_fields[0].field_name == "password"
+                    && config.hashing_algorithm == HashingAlgorithm::Sha512
             })
             .times(1)
             .returning(|_, _| Ok(()));
@@ -577,17 +555,54 @@ mod tests {
         let mut handler = create_test_handler(commander, template_store, rendered_store);
 
         let (tx, rx) = oneshot::channel();
-        handler.process_command(Command::SetDynamicFields {
-            name: "template.j2".to_string(),
-            fields: vec![DynamicFieldConfig {
-                field_name: "password".to_string(),
-                generator_type: GeneratorType::Alphanumeric(16),
-            }],
+        handler.process_command(Command::SetConfig {
+            name: "template".to_string(),
+            config: TemplateConfig {
+                id_field: "serial_number".to_string(),
+                dynamic_fields: vec![DynamicFieldConfig {
+                    field_name: "password".to_string(),
+                    generator_type: GeneratorType::Alphanumeric { length: 16 },
+                }],
+                hashing_algorithm: HashingAlgorithm::Sha512,
+            },
             response: tx,
         });
 
         let result = rx.blocking_recv().unwrap();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_config_returns_template_config() {
+        let commander = MockCommander::new();
+
+        let mut template_store = MockTemplateStore::new();
+        template_store
+            .expect_get_config()
+            .with(eq("template"))
+            .times(1)
+            .returning(|_| {
+                Some(TemplateConfig {
+                    id_field: "mac_address".to_string(),
+                    dynamic_fields: vec![],
+                    hashing_algorithm: HashingAlgorithm::None,
+                })
+            });
+
+        let rendered_store = MockRenderedStore::new();
+
+        let mut handler = create_test_handler(commander, template_store, rendered_store);
+
+        let (tx, rx) = oneshot::channel();
+        handler.process_command(Command::GetConfig {
+            name: "template".to_string(),
+            response: tx,
+        });
+
+        let result = rx.blocking_recv().unwrap();
+        assert!(result.is_ok());
+        let config = result.unwrap().unwrap();
+        assert_eq!(config.id_field, "mac_address");
     }
 
     #[test]
@@ -597,7 +612,7 @@ mod tests {
         let mut template_store = MockTemplateStore::new();
         template_store
             .expect_delete()
-            .with(eq("template.j2"))
+            .with(eq("template"))
             .times(1)
             .return_const(());
 
@@ -607,7 +622,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         handler.process_command(Command::DeleteTemplate {
-            name: "template.j2".to_string(),
+            name: "template".to_string(),
             response: tx,
         });
 
