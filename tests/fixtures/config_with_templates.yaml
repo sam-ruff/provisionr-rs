@@ -1,0 +1,10 @@
+log_level: debug
+port: 8080
+db: test.db
+
+templates:
+  greeting:
+    template_path: ./templates/test_template.j2
+    values_path: ./values/test_values.yaml
+    id_field: name
+    dynamic_fields: []

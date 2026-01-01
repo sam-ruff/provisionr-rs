@@ -1,0 +1,13 @@
+log_level: warn
+port: 9000
+db: multi.db
+
+templates:
+  first:
+    template_path: ./templates/test_template.j2
+    values_path: ./values/test_values.yaml
+    id_field: id
+
+  second:
+    template_path: ./templates/test_template.j2
+    id_field: serial

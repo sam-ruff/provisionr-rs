@@ -1,0 +1,7 @@
+log_level: info
+port: 3000
+
+templates:
+  simple:
+    template_path: ./templates/test_template.j2
+    id_field: hostname

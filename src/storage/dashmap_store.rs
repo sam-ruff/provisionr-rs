@@ -4,6 +4,7 @@ use crate::storage::models::{TemplateConfig, TemplateData};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TemplateStore: Send {
+    fn init_template(&mut self, name: &str, data: TemplateData);
     fn set_template_content(&mut self, name: &str, content: String);
     fn set_values(&mut self, name: &str, yaml_str: String) -> Result<(), String>;
     fn set_config(&mut self, name: &str, config: TemplateConfig) -> Result<(), String>;
@@ -29,6 +30,10 @@ impl Default for DashMapTemplateStore {
 }
 
 impl TemplateStore for DashMapTemplateStore {
+    fn init_template(&mut self, name: &str, data: TemplateData) {
+        self.map.insert(name.to_string(), data);
+    }
+
     fn set_template_content(&mut self, name: &str, content: String) {
         self.map
             .entry(name.to_string())
@@ -51,7 +56,6 @@ impl TemplateStore for DashMapTemplateStore {
             Some(mut entry) => {
                 entry.id_field = config.id_field;
                 entry.dynamic_fields = config.dynamic_fields;
-                entry.hashing_algorithm = config.hashing_algorithm;
                 Ok(())
             }
             None => Err(format!("Template '{}' not found", name)),
@@ -62,7 +66,6 @@ impl TemplateStore for DashMapTemplateStore {
         self.map.get(name).map(|data| TemplateConfig {
             id_field: data.id_field.clone(),
             dynamic_fields: data.dynamic_fields.clone(),
-            hashing_algorithm: data.hashing_algorithm.clone(),
         })
     }
 
@@ -132,8 +135,8 @@ mod tests {
                     dynamic_fields: vec![DynamicFieldConfig {
                         field_name: "password".to_string(),
                         generator_type: GeneratorType::Alphanumeric { length: 16 },
+                        hashing_algorithm: HashingAlgorithm::Sha512,
                     }],
-                    hashing_algorithm: HashingAlgorithm::Sha512,
                 },
             )
             .unwrap();
@@ -142,7 +145,7 @@ mod tests {
         assert_eq!(data.id_field, "serial_number");
         assert_eq!(data.dynamic_fields.len(), 1);
         assert_eq!(data.dynamic_fields[0].field_name, "password");
-        assert_eq!(data.hashing_algorithm, HashingAlgorithm::Sha512);
+        assert_eq!(data.dynamic_fields[0].hashing_algorithm, HashingAlgorithm::Sha512);
     }
 
     #[test]
@@ -154,7 +157,6 @@ mod tests {
             TemplateConfig {
                 id_field: "serial".to_string(),
                 dynamic_fields: vec![],
-                hashing_algorithm: HashingAlgorithm::None,
             },
         );
         assert!(result.is_err());
@@ -174,8 +176,8 @@ mod tests {
                     dynamic_fields: vec![DynamicFieldConfig {
                         field_name: "pass".to_string(),
                         generator_type: GeneratorType::Passphrase { word_count: 4 },
+                        hashing_algorithm: HashingAlgorithm::Yescrypt,
                     }],
-                    hashing_algorithm: HashingAlgorithm::Yescrypt,
                 },
             )
             .unwrap();
@@ -183,7 +185,7 @@ mod tests {
         let config = store.get_config("test").unwrap();
         assert_eq!(config.id_field, "mac");
         assert_eq!(config.dynamic_fields.len(), 1);
-        assert_eq!(config.hashing_algorithm, HashingAlgorithm::Yescrypt);
+        assert_eq!(config.dynamic_fields[0].hashing_algorithm, HashingAlgorithm::Yescrypt);
     }
 
     #[test]
@@ -216,7 +218,6 @@ mod tests {
                 TemplateConfig {
                     id_field: "mac".to_string(),
                     dynamic_fields: vec![],
-                    hashing_algorithm: HashingAlgorithm::None,
                 },
             )
             .unwrap();

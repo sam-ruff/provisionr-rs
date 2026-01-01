@@ -3,7 +3,7 @@ use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 
 use crate::error::ProvisionrError;
 use crate::generators::{create_hasher, AlphanumericGenerator, PassphraseGenerator, ValueGenerator};
-use crate::storage::models::{DynamicFieldConfig, GeneratorType, HashingAlgorithm};
+use crate::storage::models::{DynamicFieldConfig, GeneratorType};
 use crate::templating::TemplateEngine;
 
 #[cfg_attr(test, mockall::automock)]
@@ -14,11 +14,7 @@ pub trait Commander: Send {
         template_content: &str,
         values: &HashMap<String, String>,
     ) -> Result<String, ProvisionrError>;
-    fn generate_dynamic_values(
-        &self,
-        fields: &[DynamicFieldConfig],
-        hashing_algorithm: &HashingAlgorithm,
-    ) -> HashMap<String, String>;
+    fn generate_dynamic_values(&self, fields: &[DynamicFieldConfig]) -> HashMap<String, String>;
     fn parse_yaml(&self, yaml_str: &str) -> Result<Yaml, ProvisionrError>;
     fn yaml_to_map(&self, yaml: &Yaml) -> HashMap<String, String>;
     fn map_to_yaml_string(&self, map: &HashMap<String, String>) -> Result<String, ProvisionrError>;
@@ -51,12 +47,7 @@ impl<E: TemplateEngine + Send> Commander for ConcreteCommander<E> {
             .map_err(ProvisionrError::TemplateRender)
     }
 
-    fn generate_dynamic_values(
-        &self,
-        fields: &[DynamicFieldConfig],
-        hashing_algorithm: &HashingAlgorithm,
-    ) -> HashMap<String, String> {
-        let hasher = create_hasher(hashing_algorithm);
+    fn generate_dynamic_values(&self, fields: &[DynamicFieldConfig]) -> HashMap<String, String> {
         let mut result = HashMap::new();
         for field in fields {
             let generator: Box<dyn ValueGenerator> = match &field.generator_type {
@@ -68,6 +59,7 @@ impl<E: TemplateEngine + Send> Commander for ConcreteCommander<E> {
                 }
             };
             let raw_value = generator.generate();
+            let hasher = create_hasher(&field.hashing_algorithm);
             let hashed_value = hasher.hash(&raw_value);
             result.insert(field.field_name.clone(), hashed_value);
         }
@@ -121,8 +113,10 @@ impl<E: TemplateEngine + Send> Commander for ConcreteCommander<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::models::HashingAlgorithm;
     use crate::templating::{MiniJinjaEngine, MockTemplateEngine};
     use mockall::predicate::*;
+    use quickcheck as _;
     use quickcheck_macros::quickcheck;
 
     fn create_commander() -> ConcreteCommander<MiniJinjaEngine> {
@@ -222,9 +216,10 @@ mod tests {
         let fields = vec![DynamicFieldConfig {
             field_name: "password".to_string(),
             generator_type: GeneratorType::Alphanumeric { length },
+            hashing_algorithm: HashingAlgorithm::None,
         }];
 
-        let result = commander.generate_dynamic_values(&fields, &HashingAlgorithm::None);
+        let result = commander.generate_dynamic_values(&fields);
         result
             .get("password")
             .map(|p| p.len() == length)
@@ -239,9 +234,10 @@ mod tests {
         let fields = vec![DynamicFieldConfig {
             field_name: "passphrase".to_string(),
             generator_type: GeneratorType::Passphrase { word_count },
+            hashing_algorithm: HashingAlgorithm::None,
         }];
 
-        let result = commander.generate_dynamic_values(&fields, &HashingAlgorithm::None);
+        let result = commander.generate_dynamic_values(&fields);
         result
             .get("passphrase")
             .map(|p| p.split('-').count() == word_count)

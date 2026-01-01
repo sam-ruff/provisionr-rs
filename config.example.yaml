@@ -1,0 +1,28 @@
+# Provisionr Configuration Example
+# Copy to config.yaml and modify as needed
+
+# Log level: trace, debug, info, warn, error
+log_level: info
+
+# Port to listen on
+port: 3000
+
+# SQLite database path for storing rendered templates
+db: provisionr.db
+
+# Templates to load at startup (optional)
+# These can be overwritten via the REST API
+# templates:
+#   kickstart:
+#     template_path: ./templates/kickstart.ks.j2
+#     values_path: ./values/kickstart.yaml
+#     id_field: mac_address
+#     dynamic_fields:
+#       - field_name: root_password
+#         type: passphrase
+#         word_count: 4
+#         hashing_algorithm: sha512
+#
+#   cloud-init:
+#     template_path: ./templates/cloud-init.yaml.j2
+#     id_field: hostname
