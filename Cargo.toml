@@ -27,11 +27,12 @@ clap = { version = "4.5.53", features = ["derive"] }
 sha-crypt = "0.5.0"
 yescrypt = "0.1.0-rc.1"
 dashmap = "6.1.0"
+serde_yaml = "0.9.34"
 
 [dev-dependencies]
 ctor = "0.6.3"
 mockall = "0.14.0"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.1.0"
-reqwest = { version = "0.12.28", features = ["json", "multipart"] }
+reqwest = { version = "0.13.1", features = ["json", "multipart"] }
 serde_json = "1.0.147"

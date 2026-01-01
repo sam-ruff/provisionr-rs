@@ -203,9 +203,8 @@ async fn test_dynamic_field_generation() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "mac_address",
-            "hashing_algorithm": "none",
             "dynamic_fields": [
-                {"field_name": "password", "type": "alphanumeric", "length": 16}
+                {"field_name": "password", "type": "alphanumeric", "length": 16, "hashing_algorithm": "none"}
             ]
         }))
         .send()
@@ -510,9 +509,8 @@ async fn test_get_config() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "serial_number",
-            "hashing_algorithm": "sha512",
             "dynamic_fields": [
-                {"field_name": "password", "type": "alphanumeric", "length": 16}
+                {"field_name": "password", "type": "alphanumeric", "length": 16, "hashing_algorithm": "sha512"}
             ]
         }))
         .send()
@@ -530,10 +528,10 @@ async fn test_get_config() {
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["id_field"], "serial_number");
-    assert_eq!(body["hashing_algorithm"], "sha512");
     assert_eq!(body["dynamic_fields"][0]["field_name"], "password");
     assert_eq!(body["dynamic_fields"][0]["type"], "alphanumeric");
     assert_eq!(body["dynamic_fields"][0]["length"], 16);
+    assert_eq!(body["dynamic_fields"][0]["hashing_algorithm"], "sha512");
 
     // Cleanup
     client.delete(url(&format!("/api/v1/template/{}", name))).send().await.unwrap();
@@ -553,9 +551,8 @@ async fn test_sha512_hashing() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "mac_address",
-            "hashing_algorithm": "sha512",
             "dynamic_fields": [
-                {"field_name": "password", "type": "alphanumeric", "length": 16}
+                {"field_name": "password", "type": "alphanumeric", "length": 16, "hashing_algorithm": "sha512"}
             ]
         }))
         .send()
@@ -592,9 +589,8 @@ async fn test_yescrypt_hashing() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "mac_address",
-            "hashing_algorithm": "yescrypt",
             "dynamic_fields": [
-                {"field_name": "password", "type": "alphanumeric", "length": 16}
+                {"field_name": "password", "type": "alphanumeric", "length": 16, "hashing_algorithm": "yescrypt"}
             ]
         }))
         .send()
@@ -631,9 +627,8 @@ async fn test_dynamic_field_caching() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "mac_address",
-            "hashing_algorithm": "none",
             "dynamic_fields": [
-                {"field_name": "password", "type": "alphanumeric", "length": 16}
+                {"field_name": "password", "type": "alphanumeric", "length": 16, "hashing_algorithm": "none"}
             ]
         }))
         .send()
@@ -689,9 +684,8 @@ async fn test_passphrase_generation() {
         .put(url(&format!("/api/v1/config/{}", name)))
         .json(&json!({
             "id_field": "mac_address",
-            "hashing_algorithm": "none",
             "dynamic_fields": [
-                {"field_name": "secret", "type": "passphrase", "word_count": 4}
+                {"field_name": "secret", "type": "passphrase", "word_count": 4, "hashing_algorithm": "none"}
             ]
         }))
         .send()
@@ -711,6 +705,60 @@ async fn test_passphrase_generation() {
     let passphrase = body.strip_prefix("Passphrase: ").unwrap();
     let word_count = passphrase.split('-').count();
     assert_eq!(word_count, 4, "Expected 4 words, got: {}", passphrase);
+
+    // Cleanup
+    client.delete(url(&format!("/api/v1/template/{}", name))).send().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore] // Requires running server
+async fn test_mixed_hashing_algorithms() {
+    let client = Client::new();
+    let name = unique_name("mixedhash");
+
+    // Create template with multiple dynamic fields
+    upload_template(&client, &name, "Plain: {{ plain }}\nSHA512: {{ sha_pass }}\nYescrypt: {{ yes_pass }}").await;
+
+    // Set config with different hashing algorithms per field
+    let resp = client
+        .put(url(&format!("/api/v1/config/{}", name)))
+        .json(&json!({
+            "id_field": "mac_address",
+            "dynamic_fields": [
+                {"field_name": "plain", "type": "alphanumeric", "length": 12, "hashing_algorithm": "none"},
+                {"field_name": "sha_pass", "type": "alphanumeric", "length": 16, "hashing_algorithm": "sha512"},
+                {"field_name": "yes_pass", "type": "passphrase", "word_count": 3, "hashing_algorithm": "yescrypt"}
+            ]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // Render - each field should have its own hashing applied
+    let resp = client
+        .get(url(&format!("/api/v1/template/{}?mac_address=MIX:01", name)))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body = resp.text().await.unwrap();
+    let lines: Vec<&str> = body.lines().collect();
+
+    // Plain should be 12 alphanumeric characters (no hash prefix)
+    let plain = lines[0].strip_prefix("Plain: ").unwrap();
+    assert_eq!(plain.len(), 12, "Plain should be 12 chars: {}", plain);
+    assert!(plain.chars().all(|c| c.is_ascii_alphanumeric()), "Plain should be alphanumeric: {}", plain);
+    assert!(!plain.starts_with('$'), "Plain should not be hashed: {}", plain);
+
+    // SHA512 should have $6$ prefix
+    let sha_pass = lines[1].strip_prefix("SHA512: ").unwrap();
+    assert!(sha_pass.starts_with("$6$"), "SHA512 hash should have $6$ prefix: {}", sha_pass);
+
+    // Yescrypt should have $y$ prefix
+    let yes_pass = lines[2].strip_prefix("Yescrypt: ").unwrap();
+    assert!(yes_pass.starts_with("$y$"), "Yescrypt hash should have $y$ prefix: {}", yes_pass);
 
     // Cleanup
     client.delete(url(&format!("/api/v1/template/{}", name))).send().await.unwrap();

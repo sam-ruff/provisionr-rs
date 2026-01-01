@@ -186,7 +186,7 @@ where
 
         let generated = self
             .commander
-            .generate_dynamic_values(&template_data.dynamic_fields, &template_data.hashing_algorithm);
+            .generate_dynamic_values(&template_data.dynamic_fields);
         let generated_yaml = self.commander.map_to_yaml_string(&generated)?;
 
         for (k, v) in &generated {
@@ -377,7 +377,6 @@ mod tests {
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
-                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
@@ -418,7 +417,7 @@ mod tests {
         commander
             .expect_generate_dynamic_values()
             .times(1)
-            .returning(|_, _| HashMap::new());
+            .returning(|_| HashMap::new());
         commander
             .expect_map_to_yaml_string()
             .times(1)
@@ -439,7 +438,6 @@ mod tests {
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
-                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
@@ -513,7 +511,6 @@ mod tests {
                 id_field: "mac_address".to_string(),
                 values_yaml: None,
                 dynamic_fields: vec![],
-                hashing_algorithm: HashingAlgorithm::None,
             })
         });
 
@@ -545,7 +542,7 @@ mod tests {
                     && config.id_field == "serial_number"
                     && config.dynamic_fields.len() == 1
                     && config.dynamic_fields[0].field_name == "password"
-                    && config.hashing_algorithm == HashingAlgorithm::Sha512
+                    && config.dynamic_fields[0].hashing_algorithm == HashingAlgorithm::Sha512
             })
             .times(1)
             .returning(|_, _| Ok(()));
@@ -562,8 +559,8 @@ mod tests {
                 dynamic_fields: vec![DynamicFieldConfig {
                     field_name: "password".to_string(),
                     generator_type: GeneratorType::Alphanumeric { length: 16 },
+                    hashing_algorithm: HashingAlgorithm::Sha512,
                 }],
-                hashing_algorithm: HashingAlgorithm::Sha512,
             },
             response: tx,
         });
@@ -585,7 +582,6 @@ mod tests {
                 Some(TemplateConfig {
                     id_field: "mac_address".to_string(),
                     dynamic_fields: vec![],
-                    hashing_algorithm: HashingAlgorithm::None,
                 })
             });
 

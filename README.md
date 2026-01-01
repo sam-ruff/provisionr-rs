@@ -9,10 +9,34 @@ A REST-based template provisioning system for generating configuration files wit
 cargo run --release
 
 # Custom port and database
-PROVISIONR_PORT=8080 PROVISIONR_DB=./data.db cargo run --release
+cargo run --release -- --port 8080 --db ./data.db
+
+# With debug logging
+cargo run --release -- --log-level debug
+
+# With config file
+cargo run --release -- --config config.yaml
 ```
 
+CLI options:
+- `--config`, `-c`: Path to YAML configuration file
+- `--port`, `-p`: Port to listen on (default: 3000)
+- `--db`: Database path (default: provisionr.db)
+- `--log-level`: Log level - trace, debug, info, warn, error (default: info)
+
+CLI arguments override config file values.
+
 Swagger UI available at `http://localhost:3000/swagger-ui/`
+
+## Configuration
+
+See `config.example.yaml` for a complete example. Copy it to `config.yaml` and modify as needed:
+
+```yaml
+log_level: info
+port: 3000
+db: provisionr.db
+```
 
 ## Testing
 
@@ -30,18 +54,33 @@ cargo test -- --include-ignored
 
 ## API
 
+### Templates
+
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/template/{name}` | Upload template (multipart file) |
-| GET | `/api/template/{name}` | Render template with query params |
-| DELETE | `/api/template/{name}` | Delete template |
-| PUT | `/api/template/{name}/values` | Set default values (YAML body) |
-| PUT | `/api/template/{name}/id-field` | Set caching ID field |
-| PUT | `/api/template/{name}/dynamic-fields` | Configure generated fields |
-| GET | `/api/rendered/{name}` | List cached renders |
-| GET | `/api/rendered/{name}/{id}` | Get specific cached render |
+| POST | `/api/v1/template/{name}` | Upload template (multipart file) |
+| GET | `/api/v1/template/{name}` | Render template with query params |
+| DELETE | `/api/v1/template/{name}` | Delete template |
+| PUT | `/api/v1/template/{name}/values` | Set default values (YAML/JSON body) |
 
-Template names automatically get `.j2` extension appended if missing.
+### Configuration
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/config/{name}` | Get template configuration |
+| PUT | `/api/v1/config/{name}` | Set template configuration |
+
+Configuration includes:
+- `id_field`: Query parameter used for caching (default: mac_address)
+- `dynamic_fields`: Auto-generated values (alphanumeric or passphrase)
+- `hashing_algorithm`: none, sha512, or yescrypt
+
+### Rendered Templates
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/rendered/{name}` | List cached renders |
+| GET | `/api/v1/rendered/{name}/{id}` | Get specific cached render |
 
 ## Building
 

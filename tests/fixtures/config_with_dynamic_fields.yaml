@@ -1,0 +1,16 @@
+log_level: info
+port: 3000
+
+templates:
+  kickstart:
+    template_path: ./templates/test_template.j2
+    id_field: mac_address
+    dynamic_fields:
+      - field_name: root_password
+        type: passphrase
+        word_count: 4
+        hashing_algorithm: sha512
+      - field_name: api_key
+        type: alphanumeric
+        length: 32
+        hashing_algorithm: none
