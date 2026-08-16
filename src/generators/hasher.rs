@@ -1,6 +1,6 @@
 use crate::storage::models::HashingAlgorithm;
-use sha_crypt::{sha512_simple, Sha512Params};
-use yescrypt::{PasswordHasher as YescryptPasswordHasher, Yescrypt};
+use sha_crypt::{PasswordHasher as _, ShaCrypt};
+use yescrypt::Yescrypt;
 
 pub trait PasswordHasher: Send + Sync {
     fn hash(&self, password: &str) -> String;
@@ -10,8 +10,10 @@ pub struct Sha512Hasher;
 
 impl PasswordHasher for Sha512Hasher {
     fn hash(&self, password: &str) -> String {
-        let params = Sha512Params::new(5000).expect("Invalid SHA-512 rounds");
-        sha512_simple(password, &params).expect("SHA-512 hashing failed")
+        ShaCrypt::SHA512
+            .hash_password(password.as_bytes())
+            .expect("SHA-512 hashing failed")
+            .to_string()
     }
 }
 
@@ -19,7 +21,7 @@ pub struct YescryptHasher;
 
 impl PasswordHasher for YescryptHasher {
     fn hash(&self, password: &str) -> String {
-        Yescrypt
+        Yescrypt::default()
             .hash_password(password.as_bytes())
             .expect("Yescrypt hashing failed").to_string()
     }
@@ -63,6 +65,31 @@ mod tests {
         let hasher = YescryptHasher;
         let result = hasher.hash("testpassword");
         assert!(result.starts_with("$y$"), "Yescrypt hash should start with $y$");
+    }
+
+    #[test]
+    fn sha512_hash_uses_default_rounds_and_verifies() {
+        use sha_crypt::PasswordVerifier;
+
+        let result = Sha512Hasher.hash("testpassword");
+        assert!(result.starts_with("$6$rounds=5000$"), "got {result}");
+        assert!(ShaCrypt::SHA512.verify_password(b"testpassword", result.as_str()).is_ok());
+        assert!(ShaCrypt::SHA512.verify_password(b"wrong", result.as_str()).is_err());
+    }
+
+    #[test]
+    fn yescrypt_hash_verifies() {
+        use yescrypt::PasswordVerifier;
+
+        let result = YescryptHasher.hash("testpassword");
+        assert!(Yescrypt::default().verify_password(b"testpassword", result.as_str()).is_ok());
+        assert!(Yescrypt::default().verify_password(b"wrong", result.as_str()).is_err());
+    }
+
+    #[test]
+    fn hashes_are_salted() {
+        assert_ne!(Sha512Hasher.hash("same"), Sha512Hasher.hash("same"));
+        assert_ne!(YescryptHasher.hash("same"), YescryptHasher.hash("same"));
     }
 
     #[test]

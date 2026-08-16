@@ -1,4 +1,5 @@
-use ctor::{ctor, dtor};
+use ctor::ctor;
+use dtor::dtor;
 use reqwest::multipart;
 use reqwest::Client;
 use rusqlite::Connection;
@@ -14,12 +15,12 @@ fn clear_database() {
     }
 }
 
-#[ctor]
+#[ctor(unsafe)]
 fn setup() {
     clear_database();
 }
 
-#[dtor]
+#[dtor(unsafe)]
 fn teardown() {
     clear_database();
 }

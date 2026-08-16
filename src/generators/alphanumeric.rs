@@ -1,6 +1,6 @@
 use crate::generators::traits::ValueGenerator;
 use rand::distr::Alphanumeric;
-use rand::Rng;
+use rand::RngExt;
 
 pub struct AlphanumericGenerator {
     length: usize,
