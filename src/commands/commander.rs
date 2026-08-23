@@ -275,4 +275,39 @@ mod tests {
         assert_eq!(map.get("value"), Some(&"123".to_string()));
         assert_eq!(map.get("flag"), Some(&"true".to_string()));
     }
+
+    #[test]
+    fn parse_yaml_handles_short_and_empty_documents() {
+        let commander = create_commander();
+
+        for short in ["a", "-", "1", "a:", "- b", "[]", "{}"] {
+            assert!(
+                commander.parse_yaml(short).is_ok(),
+                "short document {short:?} should parse"
+            );
+        }
+
+        let map = commander.yaml_to_map(&commander.parse_yaml("a:").unwrap());
+        assert!(map.is_empty());
+
+        for empty in ["", "   ", "\n", "# comment only"] {
+            let err = commander.parse_yaml(empty).unwrap_err();
+            assert!(matches!(err, ProvisionrError::YamlParse(_)));
+        }
+    }
+
+    #[test]
+    fn map_to_yaml_string_roundtrips_through_parse_yaml() {
+        let commander = create_commander();
+        let mut input = HashMap::new();
+        input.insert("host".to_string(), "example.org".to_string());
+        input.insert("port".to_string(), "8080".to_string());
+        input.insert("empty".to_string(), String::new());
+
+        let emitted = commander.map_to_yaml_string(&input).unwrap();
+        let parsed = commander.parse_yaml(&emitted).unwrap();
+        let output = commander.yaml_to_map(&parsed);
+
+        assert_eq!(output, input);
+    }
 }
