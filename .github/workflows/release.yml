@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sophie]
     if: "!startsWith(github.event.head_commit.message, 'chore')"
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
 
   build:
     name: Build Binaries
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sophie]
     needs: test
     strategy:
       matrix:
@@ -96,7 +96,7 @@ jobs:
 
   release:
     name: Semantic Release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sophie]
     needs: build
     steps:
       - uses: actions/checkout@v4
