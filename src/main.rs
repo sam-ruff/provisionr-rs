@@ -317,6 +317,104 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
     }
 
+    fn openapi_json() -> serde_json::Value {
+        let json = ApiDoc::openapi().to_json().expect("OpenAPI doc should serialise");
+        serde_json::from_str(&json).expect("OpenAPI doc should be valid JSON")
+    }
+
+    #[test]
+    fn openapi_doc_uses_3_1_and_lists_every_route() {
+        let doc = openapi_json();
+
+        assert_eq!(doc["openapi"], "3.1.0");
+
+        let mut paths: Vec<&str> = doc["paths"]
+            .as_object()
+            .expect("paths should be an object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        paths.sort_unstable();
+        assert_eq!(
+            paths,
+            [
+                "/api/v1/config/{name}",
+                "/api/v1/rendered/{name}",
+                "/api/v1/rendered/{name}/{id_value}",
+                "/api/v1/template/{name}",
+                "/api/v1/template/{name}/values",
+            ]
+        );
+    }
+
+    #[test]
+    fn openapi_flattened_generator_is_composed_with_all_of() {
+        let doc = openapi_json();
+        let schema = &doc["components"]["schemas"]["DynamicFieldConfig"];
+
+        assert_eq!(schema["allOf"][0]["$ref"], "#/components/schemas/GeneratorType");
+        assert_eq!(schema["allOf"][1]["required"], serde_json::json!(["field_name"]));
+        assert_eq!(
+            schema["allOf"][1]["properties"]["hashing_algorithm"]["$ref"],
+            "#/components/schemas/HashingAlgorithm"
+        );
+    }
+
+    #[test]
+    fn openapi_optional_field_is_nullable_and_not_required() {
+        let doc = openapi_json();
+        let schema = &doc["components"]["schemas"]["TemplateData"];
+
+        assert_eq!(
+            schema["properties"]["values_yaml"]["type"],
+            serde_json::json!(["string", "null"])
+        );
+        let required = schema["required"].as_array().expect("required should be an array");
+        assert!(!required.iter().any(|field| field == "values_yaml"));
+    }
+
+    #[tokio::test]
+    async fn swagger_ui_serves_page_and_openapi_doc() {
+        let app: Router =
+            Router::new().merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("should bind to an ephemeral port");
+        let addr = listener.local_addr().expect("listener should have an address");
+        let server = tokio::spawn(async move { axum::serve(listener, app).await });
+
+        let client = reqwest::Client::new();
+        let page = client
+            .get(format!("http://{addr}/swagger-ui/"))
+            .send()
+            .await
+            .expect("swagger ui request should succeed");
+        assert!(page.status().is_success());
+        let body = page.text().await.expect("swagger ui body should be text");
+        assert!(body.contains("swagger-ui"));
+
+        let initializer = client
+            .get(format!("http://{addr}/swagger-ui/swagger-initializer.js"))
+            .send()
+            .await
+            .expect("swagger initializer request should succeed");
+        assert!(initializer.status().is_success());
+        let script = initializer.text().await.expect("initializer body should be text");
+        assert!(script.contains("/api-docs/openapi.json"));
+
+        let served: serde_json::Value = client
+            .get(format!("http://{addr}/api-docs/openapi.json"))
+            .send()
+            .await
+            .expect("openapi request should succeed")
+            .json()
+            .await
+            .expect("openapi response should be JSON");
+        assert_eq!(served, openapi_json());
+
+        server.abort();
+    }
+
     #[test]
     fn load_config_with_templates_and_values() {
         let config_path = fixtures_path().join("config_with_templates.yaml");
