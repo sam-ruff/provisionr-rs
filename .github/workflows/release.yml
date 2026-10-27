@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -14,18 +17,25 @@ jobs:
   test:
     name: Run Tests
     runs-on: [self-hosted, sophie]
-    if: "!startsWith(github.event.head_commit.message, 'chore')"
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Build all targets
+        run: cargo build --all-targets --locked
 
       - name: Run unit tests
-        run: cargo test
+        run: cargo test --locked
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Build application
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Start server for integration tests
         run: |
@@ -47,7 +57,7 @@ jobs:
           exit 1
 
       - name: Run integration tests
-        run: cargo test -- --ignored
+        run: cargo test --locked -- --ignored
 
       - name: Stop server
         if: always()
@@ -82,7 +92,7 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build release binary
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: Rename binary
         run: |
@@ -96,6 +106,7 @@ jobs:
 
   release:
     name: Semantic Release
+    if: github.event_name == 'push'
     runs-on: [self-hosted, sophie]
     needs: build
     steps:

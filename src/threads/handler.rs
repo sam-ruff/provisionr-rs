@@ -237,7 +237,9 @@ mod tests {
     };
     use crate::storage::{MockRenderedStore, MockTemplateStore};
     use mockall::predicate::*;
+    use std::time::Duration;
     use tokio::sync::{mpsc, oneshot};
+    use tokio::time::timeout;
     use yaml_rust2::YamlLoader;
 
     fn create_test_handler(
@@ -248,6 +250,83 @@ mod tests {
         let (_tx, rx) = mpsc::channel(1);
         let cancel_token = CancellationToken::new();
         ConcreteHandler::new_with_token(commander, template_store, rendered_store, rx, cancel_token)
+    }
+
+    #[tokio::test]
+    async fn main_loop_drains_queued_commands_when_senders_close() {
+        let mut template_store = MockTemplateStore::new();
+        template_store
+            .expect_get_config()
+            .times(2)
+            .returning(|_| None);
+        let (tx, rx) = mpsc::channel(2);
+        let mut handler = ConcreteHandler::new_with_token(
+            MockCommander::new(),
+            template_store,
+            MockRenderedStore::new(),
+            rx,
+            CancellationToken::new(),
+        );
+        let mut responses = Vec::new();
+        for name in ["first", "second"] {
+            let (response, receiver) = oneshot::channel();
+            tx.send(Command::GetConfig {
+                name: name.into(),
+                response,
+            })
+            .await
+            .unwrap();
+            responses.push(receiver);
+        }
+        drop(tx);
+
+        timeout(Duration::from_secs(5), handler.main_loop())
+            .await
+            .unwrap();
+        for response in responses {
+            assert!(response.await.unwrap().unwrap().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn main_loop_cancellation_closes_channel_with_sender_still_open() {
+        let mut template_store = MockTemplateStore::new();
+        template_store
+            .expect_get_config()
+            .times(1)
+            .returning(|_| None);
+        let (tx, rx) = mpsc::channel(1);
+        let token = CancellationToken::new();
+        let mut handler = ConcreteHandler::new_with_token(
+            MockCommander::new(),
+            template_store,
+            MockRenderedStore::new(),
+            rx,
+            token.clone(),
+        );
+        let worker = tokio::spawn(async move { handler.main_loop().await });
+        let (response, receiver) = oneshot::channel();
+        tx.send(Command::GetConfig {
+            name: "ready".into(),
+            response,
+        })
+        .await
+        .unwrap();
+        assert!(
+            timeout(Duration::from_secs(5), receiver)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .is_none()
+        );
+
+        token.cancel();
+        timeout(Duration::from_secs(5), worker)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(tx.is_closed());
     }
 
     #[test]
