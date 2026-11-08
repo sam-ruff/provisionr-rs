@@ -5,29 +5,29 @@ edition = "2024"
 
 [dependencies]
 axum = { version = "0.8.9", features = ["multipart"] }
-tokio = { version = "1.53.2", features = ["full"] }
-axum-server = "0.8.0"
+tokio = { version = "1.54.1", features = ["full"] }
+axum-server = "0.9.0"
 ctrlc = "3.5.2"
-tokio-util = "0.7.19"
+tokio-util = "0.7.20"
 once_cell = "1.21.4"
 async-trait = "0.1.92"
-log = "0.4.34"
+log = "0.4.35"
 env_logger = "0.11.11"
 serde = { version = "1.0.229", features = ["derive"] }
-rust-embed = "8.12.0"
+rust-embed = "8.13.0"
 mime_guess = "2.0.5"
 yaml-rust2 = { version = "0.13.0", default-features = false }
-minijinja = "2.24.0"
+minijinja = "3.1.0"
 rand = "0.10.3"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 utoipa = { version = "6.0.0", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "10.0.1", features = ["axum"] }
+utoipa-swagger-ui = { version = "10.0.2", features = ["axum"] }
 thiserror = "2.0.21"
 clap = { version = "4.6.7", features = ["derive"] }
 sha-crypt = { version = "0.6.0", features = ["getrandom"] }
 yescrypt = "0.1.0"
 dashmap = "6.2.1"
-serde_yaml = "0.9.34"
+serde_yaml = { package = "serde_yaml_ng", version = "0.10.0" }
 
 [dev-dependencies]
 ctor = "1.0.13"
@@ -36,4 +36,4 @@ mockall = "0.15.0"
 quickcheck = "1.1.0"
 quickcheck_macros = "1.2.0"
 reqwest = { version = "0.13.5", features = ["json", "multipart"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"

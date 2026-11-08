@@ -2,7 +2,7 @@ use ctor::ctor;
 use dtor::dtor;
 use reqwest::multipart;
 use reqwest::Client;
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -10,7 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const DB_PATH: &str = "provisionr.db";
 
 fn clear_database() {
-    if let Ok(conn) = Connection::open(DB_PATH) {
+    // Open without SQLITE_OPEN_CREATE so a plain `cargo test` does not leave an empty database behind.
+    if let Ok(conn) = Connection::open_with_flags(DB_PATH, OpenFlags::SQLITE_OPEN_READ_WRITE) {
         let _ = conn.execute("DELETE FROM rendered_templates", []);
     }
 }

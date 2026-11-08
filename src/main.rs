@@ -415,6 +415,52 @@ mod tests {
         server.abort();
     }
 
+    #[tokio::test]
+    async fn axum_server_serves_and_shuts_down_gracefully() {
+        let app: Router = Router::new().route("/", get(index));
+        let handle: Handle<SocketAddr> = Handle::new();
+        let token = CancellationToken::new();
+        let server = tokio::spawn(
+            axum_server::bind("127.0.0.1:0".parse::<SocketAddr>().unwrap())
+                .handle(handle.clone())
+                .serve(app.into_make_service()),
+        );
+        tokio::spawn(shutdown_axum(token.clone(), handle.clone()));
+
+        let addr = handle.listening().await.expect("server should report its bound address");
+        let body = reqwest::get(format!("http://{addr}/"))
+            .await
+            .expect("index request should succeed")
+            .text()
+            .await
+            .expect("index body should be text");
+        assert_eq!(body, INDEX_HTML);
+
+        token.cancel();
+        tokio::time::timeout(Duration::from_secs(15), server)
+            .await
+            .expect("server should stop after cancellation")
+            .expect("server task should not panic")
+            .expect("server should exit cleanly");
+    }
+
+    #[test]
+    fn example_config_file_parses() {
+        let args = Args {
+            config: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("config.example.yaml")),
+            log_level: None,
+            port: None,
+            db: None,
+        };
+
+        let config = Config::from_args(args);
+
+        assert_eq!(config.log_level, "info");
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.db, "provisionr.db");
+        assert!(config.templates.is_empty());
+    }
+
     #[test]
     fn load_config_with_templates_and_values() {
         let config_path = fixtures_path().join("config_with_templates.yaml");
