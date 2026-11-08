@@ -108,4 +108,28 @@ mod tests {
         let result = engine.render(template, &values);
         assert_eq!(result.unwrap(), "Feature enabled");
     }
+
+    #[test]
+    fn render_undefined_variable_is_empty() {
+        let engine = MiniJinjaEngine::new();
+        let result = engine.render("[{{ missing }}]", &HashMap::new());
+        assert_eq!(result.unwrap(), "[]");
+    }
+
+    #[test]
+    fn render_does_not_html_escape_values() {
+        let engine = MiniJinjaEngine::new();
+        let mut values = HashMap::new();
+        values.insert("cmd".to_string(), r#"echo "<a & b>" > 'out'"#.to_string());
+
+        let result = engine.render("{{ cmd }}", &values);
+        assert_eq!(result.unwrap(), r#"echo "<a & b>" > 'out'"#);
+    }
+
+    #[test]
+    fn render_reports_runtime_errors() {
+        let engine = MiniJinjaEngine::new();
+        let result = engine.render("{{ 1 // 0 }}", &HashMap::new());
+        assert!(result.unwrap_err().starts_with("Template render error"));
+    }
 }

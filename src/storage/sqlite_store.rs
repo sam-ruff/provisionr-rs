@@ -135,3 +135,88 @@ impl RenderedStore for SqliteRenderedStore {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn memory_store() -> SqliteRenderedStore {
+        let store = SqliteRenderedStore::new(":memory:").expect("in-memory database should open");
+        store.init().expect("schema should initialise");
+        store
+    }
+
+    #[test]
+    fn store_then_get_round_trips_all_fields() {
+        let store = memory_store();
+        let id = store
+            .store_rendered("kickstart", "aa:bb:cc", "rendered body", r#"{"pw":"x"}"#)
+            .unwrap();
+
+        let row = store.get_rendered("kickstart", "aa:bb:cc").unwrap().expect("row should exist");
+
+        assert_eq!(row.id, id);
+        assert_eq!(row.template_name, "kickstart");
+        assert_eq!(row.id_field_value, "aa:bb:cc");
+        assert_eq!(row.rendered_content, "rendered body");
+        assert_eq!(row.generated_values, r#"{"pw":"x"}"#);
+        assert!(!row.created_at.is_empty());
+    }
+
+    #[test]
+    fn get_missing_row_returns_none() {
+        let store = memory_store();
+        assert!(store.get_rendered("kickstart", "missing").unwrap().is_none());
+    }
+
+    #[test]
+    fn storing_same_key_replaces_previous_row() {
+        let store = memory_store();
+        store.store_rendered("kickstart", "host1", "first", "{}").unwrap();
+        store.store_rendered("kickstart", "host1", "second", "{}").unwrap();
+
+        let row = store.get_rendered("kickstart", "host1").unwrap().unwrap();
+        assert_eq!(row.rendered_content, "second");
+        assert_eq!(store.list_rendered("kickstart").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn list_rendered_only_returns_matching_template() {
+        let store = memory_store();
+        store.store_rendered("kickstart", "host1", "a", "{}").unwrap();
+        store.store_rendered("kickstart", "host2", "b", "{}").unwrap();
+        store.store_rendered("cloud-init", "host3", "c", "{}").unwrap();
+
+        let mut ids: Vec<String> = store
+            .list_rendered("kickstart")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id_field_value)
+            .collect();
+        ids.sort();
+
+        assert_eq!(ids, ["host1", "host2"]);
+        assert!(store.list_rendered("unknown").unwrap().is_empty());
+    }
+
+    #[test]
+    fn existing_database_file_is_readable_after_reopen() {
+        let path = std::env::temp_dir().join(format!("provisionr-sqlite-test-{}.db", std::process::id()));
+        let path_str = path.to_str().unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let store = SqliteRenderedStore::new(path_str).unwrap();
+            store.init().unwrap();
+            store.store_rendered("kickstart", "host1", "persisted", "{}").unwrap();
+        }
+
+        let reopened = SqliteRenderedStore::new(path_str).unwrap();
+        reopened.init().expect("init should be idempotent on an existing database");
+        let row = reopened.get_rendered("kickstart", "host1").unwrap().unwrap();
+        assert_eq!(row.rendered_content, "persisted");
+
+        drop(reopened);
+        std::fs::remove_file(&path).unwrap();
+    }
+}
