@@ -72,6 +72,7 @@ jobs:
     runs-on: [self-hosted, sophie]
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
@@ -98,11 +99,23 @@ jobs:
         run: |
           cp target/${{ matrix.target }}/release/provisionr ${{ matrix.artifact_name }}
 
+      # Self-hosted runners occasionally drop the connection to the artifact
+      # service (ECONNRESET); retry the upload once before failing the job.
       - name: Upload binary artifact
+        id: upload
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_name }}
+
+      - name: Retry binary artifact upload
+        if: steps.upload.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+          overwrite: true
 
   release:
     name: Semantic Release
