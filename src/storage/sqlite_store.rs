@@ -200,6 +200,27 @@ mod tests {
     }
 
     #[test]
+    fn init_is_idempotent_on_same_connection() {
+        let store = memory_store();
+        store.store_rendered("kickstart", "host1", "kept", "{}").unwrap();
+        store.init().expect("second init should not fail or drop data");
+        assert_eq!(store.get_rendered("kickstart", "host1").unwrap().unwrap().rendered_content, "kept");
+    }
+
+    #[test]
+    fn sql_like_and_unicode_content_is_stored_verbatim() {
+        let store = memory_store();
+        let content = "-- comment only\n; DROP TABLE rendered_templates; /* x */ 'quoted' \"dq\" ünïcødé 🚀\0tail";
+        let values = r#"{"pw":"-- not sql;"}"#;
+        store.store_rendered("kick'start", "id; --", content, values).unwrap();
+
+        let row = store.get_rendered("kick'start", "id; --").unwrap().unwrap();
+        assert_eq!(row.rendered_content, content);
+        assert_eq!(row.generated_values, values);
+        assert_eq!(store.list_rendered("kick'start").unwrap().len(), 1);
+    }
+
+    #[test]
     fn existing_database_file_is_readable_after_reopen() {
         let path = std::env::temp_dir().join(format!("provisionr-sqlite-test-{}.db", std::process::id()));
         let path_str = path.to_str().unwrap();
